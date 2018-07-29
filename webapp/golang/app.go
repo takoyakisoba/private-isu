@@ -187,7 +187,13 @@ func makePosts(results []Post, CSRFToken string, allComments bool) ([]Post, erro
 			return nil, err
 		}
 
-		query := "SELECT id, post_id, user_id, comment, created_at FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC"
+		query := `
+		SELECT
+			comments.id, comments.post_id, comments.user_id, comments.comment, comments.created_at
+		FROM
+			comments
+		WHERE post_id = ? ORDER BY created_at DESC
+		`
 		if !allComments {
 			query += " LIMIT 3"
 		}

@@ -53,7 +53,6 @@ type User struct {
 type Post struct {
 	ID           int       `db:"id"`
 	UserID       int       `db:"user_id"`
-	Imgdata      []byte    `db:"imgdata"`
 	Body         string    `db:"body"`
 	Mime         string    `db:"mime"`
 	CreatedAt    time.Time `db:"created_at"`
@@ -562,7 +561,7 @@ func getPostsID(c web.C, w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	rerr := db.Select(&results, "SELECT * FROM `posts` WHERE `id` = ?", pid)
+	rerr := db.Select(&results, "SELECT id, user_id, mime, body, created_at FROM `posts` WHERE `id` = ?", pid)
 	if rerr != nil {
 		fmt.Println(rerr)
 		return

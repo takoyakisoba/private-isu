@@ -53,7 +53,6 @@ type User struct {
 type Post struct {
 	ID           int       `db:"id"`
 	UserID       int       `db:"user_id"`
-	Imgdata      []byte    `db:"imgdata"`
 	Body         string    `db:"body"`
 	Mime         string    `db:"mime"`
 	CreatedAt    time.Time `db:"created_at"`
@@ -69,7 +68,7 @@ type Comment struct {
 	UserID    int       `db:"user_id"`
 	Comment   string    `db:"comment"`
 	CreatedAt time.Time `db:"created_at"`
-	User      User
+	User      User      `db:"user"`
 }
 
 func init() {
@@ -187,7 +186,15 @@ func makePosts(results []Post, CSRFToken string, allComments bool) ([]Post, erro
 			return nil, err
 		}
 
-		query := "SELECT * FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC"
+		query := `
+		SELECT
+			comments.id, comments.post_id, comments.user_id, comments.comment, comments.created_at,
+			users.id as "user.id", users.account_name as "user.account_name", users.passhash as "user.passhash", users.authority as "user.authority", users.del_flg as "user.del_flg", users.created_at as "user.created_at"
+		FROM
+			comments
+			join users on comments.user_id = users.id
+		WHERE comments.post_id = ? ORDER BY comments.created_at DESC
+		`
 		if !allComments {
 			query += " LIMIT 3"
 		}
@@ -195,13 +202,6 @@ func makePosts(results []Post, CSRFToken string, allComments bool) ([]Post, erro
 		cerr := db.Select(&comments, query, p.ID)
 		if cerr != nil {
 			return nil, cerr
-		}
-
-		for i := 0; i < len(comments); i++ {
-			uerr := db.Get(&comments[i].User, "SELECT * FROM `users` WHERE `id` = ?", comments[i].UserID)
-			if uerr != nil {
-				return nil, uerr
-			}
 		}
 
 		// reverse
@@ -393,7 +393,7 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 
 	results := []Post{}
 
-	err := db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` ORDER BY `created_at` DESC")
+	err := db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` ORDER BY `created_at` DESC limit 30")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -561,7 +561,7 @@ func getPostsID(c web.C, w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	rerr := db.Select(&results, "SELECT * FROM `posts` WHERE `id` = ?", pid)
+	rerr := db.Select(&results, "SELECT id, user_id, mime, body, created_at FROM `posts` WHERE `id` = ?", pid)
 	if rerr != nil {
 		fmt.Println(rerr)
 		return
@@ -652,12 +652,12 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := "INSERT INTO `posts` (`user_id`, `mime`, `imgdata`, `body`) VALUES (?,?,?,?)"
+	query := "INSERT INTO `posts` (`user_id`, `mime`,  `imgdata`, `body`) VALUES (?,?,?, ?)"
 	result, eerr := db.Exec(
 		query,
 		me.ID,
 		mime,
-		filedata,
+		"",
 		r.FormValue("body"),
 	)
 	if eerr != nil {
@@ -671,39 +671,27 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ext := ""
+	if mime == "image/jpeg" {
+		ext = ".jpg"
+	} else if mime == "image/png" {
+		ext = ".png"
+	} else if mime == "image/gif" {
+		ext = ".gif"
+	}
+
+	f, err := os.Create(fmt.Sprintf("/home/isucon/private_isu/webapp/public/image/%d%s", pid, ext))
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	if _, err := f.Write(filedata); err != nil {
+		panic(err)
+	}
+
 	http.Redirect(w, r, "/posts/"+strconv.FormatInt(pid, 10), http.StatusFound)
 	return
-}
-
-func getImage(c web.C, w http.ResponseWriter, r *http.Request) {
-	pidStr := c.URLParams["id"]
-	pid, err := strconv.Atoi(pidStr)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	post := Post{}
-	derr := db.Get(&post, "SELECT * FROM `posts` WHERE `id` = ?", pid)
-	if derr != nil {
-		fmt.Println(derr.Error())
-		return
-	}
-
-	ext := c.URLParams["ext"]
-
-	if ext == "jpg" && post.Mime == "image/jpeg" ||
-		ext == "png" && post.Mime == "image/png" ||
-		ext == "gif" && post.Mime == "image/gif" {
-		w.Header().Set("Content-Type", post.Mime)
-		_, err := w.Write(post.Imgdata)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-		return
-	}
-
-	w.WriteHeader(http.StatusNotFound)
 }
 
 func postComment(w http.ResponseWriter, r *http.Request) {
@@ -835,7 +823,6 @@ func main() {
 	goji.Get("/posts", getPosts)
 	goji.Get("/posts/:id", getPostsID)
 	goji.Post("/", postIndex)
-	goji.Get("/image/:id.:ext", getImage)
 	goji.Post("/comment", postComment)
 	goji.Get("/admin/banned", getAdminBanned)
 	goji.Post("/admin/banned", postAdminBanned)

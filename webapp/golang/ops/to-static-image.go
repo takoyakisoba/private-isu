@@ -104,6 +104,9 @@ func main() {
 		if err := db.Select(&posts, fmt.Sprintf("select * from posts order by id limit 1000 offset %d", offset)); err != nil {
 			panic(err)
 		}
+		if len(posts) == 0 {
+			break
+		}
 
 		toFile(posts)
 		offset += 1000

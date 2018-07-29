@@ -681,8 +681,7 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 		ext = ".gif"
 	}
 
-	cwd, _ := os.Getwd()
-	f, err := os.Create(fmt.Sprintf("%s/../public/image/%d%s", cwd, pid, ext))
+	f, err := os.Create(fmt.Sprintf("/home/isucon/private_isu/webapp/public/image/%d%s", pid, ext))
 	if err != nil {
 		panic(err)
 	}

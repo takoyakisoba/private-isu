@@ -103,10 +103,11 @@ func main() {
 		panic(err)
 	}
 
+	cwd, _ := os.Getwd()
 	for _, p := range posts {
 		ext := detectExtension(p)
 
-		f, err := os.Open(fmt.Sprintf("../public/image/%d%s", p.ID, ext))
+		f, err := os.Create(fmt.Sprintf("%s/../public/image/%d%s", cwd, p.ID, ext))
 		if err != nil {
 			panic(err)
 		}

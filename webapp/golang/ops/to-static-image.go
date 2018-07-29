@@ -98,11 +98,19 @@ func main() {
 	defer db.Close()
 
 
-	var posts []Post
-	if err := db.Select(&posts, "select * from posts"); err != nil {
-		panic(err)
-	}
+	offset := 0
+	for {
+		var posts []Post
+		if err := db.Select(&posts, fmt.Sprintf("select * from posts order by id limit 1000 offset %d", offset)); err != nil {
+			panic(err)
+		}
 
+		toFile(posts)
+		offset += 1000
+	}
+}
+
+func toFile(posts []Post) {
 	cwd, _ := os.Getwd()
 	for _, p := range posts {
 		ext := detectExtension(p)
